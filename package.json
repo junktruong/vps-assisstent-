@@ -1,0 +1,25 @@
+{
+  "name": "zalo-agent-skills-runtime",
+  "version": "1.0.0",
+  "description": "Zalo webhook agent runtime with skills-only loop",
+  "main": "src/main.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node main.js",
+    "dev": "nodemon main.js",
+    "test": "node --test"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "express": "^4.21.2",
+    "googleapis": "^150.0.1",
+    "openai": "^4.80.0",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.9"
+  }
+}
