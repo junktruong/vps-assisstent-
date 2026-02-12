@@ -2,10 +2,17 @@
 
 Webhook service nhận tin nhắn từ Zalo, chạy AI agent loop để chọn skill, và gửi kết quả ngược lại Zalo.
 
+Runtime này dùng **node-zalo-bot** (`v0.1.6`) để xử lý webhook/send message thay vì tự gọi HTTP thủ công.
+
 ## Kiến trúc chính
 
 - `src/main.js`: bootstrap logging, config, service, bridge.
-- `src/services/zaloListener.js`: route `POST /zalo-webhook` + `GET /zalo-artifacts/:artifactId`, verify secret, gửi trả lời về Zalo.
+- `src/services/zaloListener.js`:
+  - tạo `new ZaloBot(token, { polling: false })`
+  - `POST <path từ ZALO_WEBHOOK_URL>`: verify header `x-bot-api-secret-token`, gọi `bot.processUpdate(update)`
+  - đăng ký `bot.on('message', ...)`
+  - gửi message bằng `bot.sendMessage(...)`
+  - đăng ký webhook bằng `bot.setWebHook(ZALO_WEBHOOK_URL, { secret_token: ZALO_WEBHOOK_SECRET })`
 - `src/bridge/zaloAgentBridge.js`: nhận message, đưa vào queue, mỗi job chạy qua worker thread (`src/workers/agentWorker.js`).
 - `src/infra/agentRunner.js`: vòng lặp agent tối đa `AGENT_MAX_STEPS`, parse/repair `AgentAction`, gọi skill, lưu state.
 - `src/domain/agentProtocol.js`: schema action (`plan`, `call_skill`, `ask_user`, `chat`, `final`).
@@ -13,7 +20,20 @@ Webhook service nhận tin nhắn từ Zalo, chạy AI agent loop để chọn s
 - `src/infra/skills/fsTools.js`: `fs.read`, `fs.write`, `fs.patch` (chặn path ngoài workspace).
 - `src/infra/skills/gsheetTools.js`: `gsheet.read_range`, `gsheet.write_range`, `gsheet.append_rows`.
 - `src/domain/sessionState.js`: session state JSON (`AGENT_STATE_FILE`).
-- `src/infra/aiFactory.js`: build này chỉ hỗ trợ `AI_PROVIDER=API` (OpenAI API).
+- `src/infra/aiFactory.js`: hỗ trợ `AI_PROVIDER=API` hoặc `AI_PROVIDER=BROWSER`.
+- `src/infra/browserChatgptAdapter.js`: nhánh browser mode (mở ChatGPT, dán prompt, lấy response) qua `playwright-cli`.
+
+## AI mode
+
+### 1) Browser mode (mặc định)
+
+- `AI_PROVIDER=BROWSER`
+- Runtime sẽ gọi `playwright-cli` theo session (`CHATGPT_SESSION`), mở `CHATGPT_URL`, nhập prompt và đọc block trả lời mới nhất của assistant.
+
+### 2) API mode (fallback)
+
+- `AI_PROVIDER=API`
+- Cần `OPENAI_API_KEY`.
 
 ## Yêu cầu môi trường
 
@@ -21,31 +41,38 @@ Copy `.env.example` thành `.env` rồi điền giá trị.
 
 ### Bắt buộc
 
-- `ZALO_BOT_TOKEN`
-- `ZALO_WEBHOOK_URL`
-- `ZALO_WEBHOOK_SECRET`
-- `OPENAI_API_KEY`
+- `BOT_TOKEN` hoặc `ZALO_BOT_TOKEN`
+- `WEBHOOK_URL` hoặc `ZALO_WEBHOOK_URL`
+- `WEBHOOK_SECRET_TOKEN` hoặc `ZALO_WEBHOOK_SECRET`
 
 ### Quan trọng
 
-- `AI_PROVIDER` (mặc định `API`)
-- `OPENAI_MODEL` (mặc định `gpt-4o-mini`)
+- `AI_PROVIDER` (`BROWSER` hoặc `API`, mặc định `BROWSER`)
 - `AGENT_MAX_STEPS` (mặc định `8`)
 - `AGENT_STATE_FILE` (mặc định `artifacts/agent_state.json`)
 - `ZALO_HOST` (mặc định `0.0.0.0`)
 - `ZALO_PORT` (mặc định `8000`)
 
+### Browser mode settings
+
+- `PLAYWRIGHT_CLI_BIN` (tuỳ chọn; nếu trống sẽ tự tìm script mặc định hoặc fallback `npx --package @playwright/mcp playwright-cli`)
+- `CHATGPT_URL` (mặc định `https://chatgpt.com/`)
+- `CHATGPT_SESSION` (mặc định `zalo-agent`)
+- `CHATGPT_BROWSER_HEADED` (`1`/`0`)
+- `CHATGPT_RESPONSE_TIMEOUT_MS` (mặc định `180000`)
+- `CHATGPT_IDLE_POLL_MS` (mặc định `1200`)
+- `CHATGPT_PROMPT_SELECTOR`
+- `CHATGPT_RESPONSE_SELECTOR`
+
+### API mode settings
+
+- `OPENAI_API_KEY`
+- `OPENAI_MODEL` (mặc định `gpt-4o-mini`)
+
 ### Google Sheets
 
 - `GCP_SERVICE_ACCOUNT_JSON` hoặc `GCP_SERVICE_ACCOUNT_FILE`
 - `GCP_SHEETS_SCOPES` (tuỳ chọn)
-
-### Webhook secret options
-
-- `ZALO_ALLOW_QUERY_SECRET` (mặc định `0`)
-- `ZALO_ALLOW_BODY_SECRET` (mặc định `1`)
-- `ZALO_WEBHOOK_SECRET_HEADERS`
-- `ZALO_WEBHOOK_SECRET_FIELDS`
 
 ## Chạy local / VPS Ubuntu
 
@@ -56,9 +83,21 @@ npm start
 
 Service lắng nghe tại `ZALO_HOST:ZALO_PORT`.
 
+## Chuẩn bị ChatGPT session (browser mode)
+
+Chạy một lần để login ChatGPT cho session runtime:
+
+```bash
+export CODEX_HOME="${CODEX_HOME:-$HOME/.codex}"
+export PWCLI="$CODEX_HOME/skills/playwright/scripts/playwright_cli.sh"
+"$PWCLI" --session zalo-agent open https://chatgpt.com/ --headed
+```
+
+Đăng nhập thủ công trong browser, sau đó đóng lại. Runtime sẽ tái sử dụng session này.
+
 ## Deploy Ubuntu (systemd)
 
-1. Copy code lên VPS, đặt tại ví dụ `/opt/zalo-agent`.
+1. Copy code lên VPS, ví dụ `/opt/zalo-agent`.
 2. Tạo `.env` từ `.env.example`.
 3. Cài dependencies:
 
@@ -66,7 +105,8 @@ Service lắng nghe tại `ZALO_HOST:ZALO_PORT`.
 npm install
 ```
 
-4. Cài service:
+4. (Browser mode) login ChatGPT như phần trên với cùng `CHATGPT_SESSION`.
+5. Cài service:
 
 ```bash
 sudo cp deploy/zalo-agent.service /etc/systemd/system/zalo-agent.service
@@ -80,7 +120,3 @@ sudo systemctl status zalo-agent
 ```bash
 npm test
 ```
-
-## Ghi chú browser mode
-
-Luồng mở browser ChatGPT chưa bật trong build này. Nếu cần chạy browser mode thật, cần bổ sung adapter trong `src/infra/aiFactory.js`.
