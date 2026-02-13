@@ -1,6 +1,4 @@
-const fs = require("fs");
 const fsp = require("fs/promises");
-const os = require("os");
 const path = require("path");
 const crypto = require("crypto");
 const { execFile } = require("child_process");
@@ -21,12 +19,6 @@ function execFileAsync(cmd, args, options = {}) {
   });
 }
 
-function findDefaultPwcliScript() {
-  const codexHome = process.env.CODEX_HOME || path.join(os.homedir(), ".codex");
-  const scriptPath = path.join(codexHome, "skills", "playwright", "scripts", "playwright_cli.sh");
-  return fs.existsSync(scriptPath) ? scriptPath : null;
-}
-
 class BrowserChatgptAdapter {
   constructor({ logger, config }) {
     this.logger = logger;
@@ -40,17 +32,12 @@ class BrowserChatgptAdapter {
     this.workspaceRoot = config.workspaceRoot;
 
     const explicitBin = config.playwrightCliBin || "";
-    const defaultScript = findDefaultPwcliScript();
-
     if (explicitBin) {
       this.command = explicitBin;
       this.prefixArgs = [];
-    } else if (defaultScript) {
-      this.command = defaultScript;
-      this.prefixArgs = [];
     } else {
       this.command = "npx";
-      this.prefixArgs = ["--yes", "--package", "@playwright/mcp", "playwright-cli"];
+      this.prefixArgs = ["--yes", "--package", "@playwright/mcp", "playwright-mcp"];
     }
   }
 
@@ -93,6 +80,11 @@ class BrowserChatgptAdapter {
       if (message.includes("waiting for locator")) {
         throw new Error(
           "Không tìm thấy ô nhập ChatGPT. Hãy đăng nhập ChatGPT cho session này và kiểm tra CHATGPT_PROMPT_SELECTOR."
+        );
+      }
+      if (message.includes("playwright-cli: not found") || message.includes("playwright-mcp: not found")) {
+        throw new Error(
+          "Không tìm thấy binary Playwright MCP. Cài @playwright/mcp hoặc set PLAYWRIGHT_CLI_BIN=/usr/local/bin/playwright-mcp."
         );
       }
       throw err;
@@ -172,7 +164,7 @@ fs.writeFileSync(outputFile, finalText, "utf8");
 
   async runCli(args, { timeoutMs = 60_000 } = {}) {
     const allArgs = [...this.prefixArgs, ...args];
-    this.logger.debug("Running playwright-cli", {
+    this.logger.debug("Running playwright-mcp command", {
       command: this.command,
       args: allArgs,
     });

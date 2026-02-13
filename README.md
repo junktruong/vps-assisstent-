@@ -21,14 +21,14 @@ Runtime này dùng **node-zalo-bot** (`v0.1.6`) để xử lý webhook/send mess
 - `src/infra/skills/gsheetTools.js`: `gsheet.read_range`, `gsheet.write_range`, `gsheet.append_rows`.
 - `src/domain/sessionState.js`: session state JSON (`AGENT_STATE_FILE`).
 - `src/infra/aiFactory.js`: hỗ trợ `AI_PROVIDER=API` hoặc `AI_PROVIDER=BROWSER`.
-- `src/infra/browserChatgptAdapter.js`: nhánh browser mode (mở ChatGPT, dán prompt, lấy response) qua `playwright-cli`.
+- `src/infra/browserChatgptAdapter.js`: nhánh browser mode (mở ChatGPT, dán prompt, lấy response) qua `playwright-mcp`.
 
 ## AI mode
 
 ### 1) Browser mode (mặc định)
 
 - `AI_PROVIDER=BROWSER`
-- Runtime sẽ gọi `playwright-cli` theo session (`CHATGPT_SESSION`), mở `CHATGPT_URL`, nhập prompt và đọc block trả lời mới nhất của assistant.
+- Runtime sẽ gọi `playwright-mcp` theo session (`CHATGPT_SESSION`), mở `CHATGPT_URL`, nhập prompt và đọc block trả lời mới nhất của assistant.
 
 ### 2) API mode (fallback)
 
@@ -51,11 +51,11 @@ Copy `.env.example` thành `.env` rồi điền giá trị.
 - `AGENT_MAX_STEPS` (mặc định `8`)
 - `AGENT_STATE_FILE` (mặc định `artifacts/agent_state.json`)
 - `ZALO_HOST` (mặc định `0.0.0.0`)
-- `ZALO_PORT` (mặc định `8000`)
+- `ZALO_PORT` (mặc định `7090`)
 
 ### Browser mode settings
 
-- `PLAYWRIGHT_CLI_BIN` (tuỳ chọn; nếu trống sẽ tự tìm script mặc định hoặc fallback `npx --package @playwright/mcp playwright-cli`)
+- `PLAYWRIGHT_CLI_BIN` (tuỳ chọn; nếu trống sẽ fallback `npx --package @playwright/mcp playwright-mcp`)
 - `CHATGPT_URL` (mặc định `https://chatgpt.com/`)
 - `CHATGPT_SESSION` (mặc định `zalo-agent`)
 - `CHATGPT_BROWSER_HEADED` (`1`/`0`)

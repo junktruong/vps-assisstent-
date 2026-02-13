@@ -77,7 +77,7 @@ function loadConfig() {
     agentMaxSteps: parseIntWithDefault(process.env.AGENT_MAX_STEPS, 8),
     agentStateFile: path.resolve(process.cwd(), process.env.AGENT_STATE_FILE || "artifacts/agent_state.json"),
     host: process.env.ZALO_HOST || "0.0.0.0",
-    port: parseIntWithDefault(process.env.ZALO_PORT, 8000),
+    port: parseIntWithDefault(process.env.ZALO_PORT, 7090),
     workspaceRoot: process.cwd(),
     artifactsDir: path.resolve(process.cwd(), "artifacts"),
     publicBaseUrl: derivePublicBaseUrl(zaloWebhookUrl),
